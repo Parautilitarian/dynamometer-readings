@@ -16,11 +16,20 @@
  *       Table 6: mean (SD) force as % body weight by sex, decade, side.
  *       Table 5: regression equations (Newtons) on sex, weight (N), age.
  *
+ *  NL14 Douma RKW, Soer R, Krijnen WP, Reneman M, van der Schans CP.
+ *       Reference values for isometric muscle force among workers for the Netherlands.
+ *       BMC Sports Sci Med Rehabil 2014;6:10.  (n=462 workers, ages 20–59;
+ *       MicroFet 2; break test; seated hip/knee 90°)
+ *       Tables 4–5: mean (SD) force in Newtons by sex, decade, side.
+ *       Converted here to % body weight using each stratum’s mean body weight
+ *       (Tables 2). Table 6: regression on sex, age, weight (kg) and height (cm).
+ *
  *  M17  McKay MJ, Baldwin JN, Ferreira P, et al. Normative reference values for
  *       strength and flexibility of 1,000 children and adults.
  *       Neurology 2017;88:36-43.  (1000 Norms Project, ages 3-101; Citec CT 3001)
  *       Table 1: mean (SD) force in Newtons (NOT body-weight normalised) by sex and
- *       age band (3-9, 10-19, 20-59, 60+). Dominant limb only.
+ *       age band (3-9, 10-19, 20-59, 60+). Dominant limb only. Knee flexors were
+ *       measured with fixed dynamometry (Nm), so they are not used as HHD norms.
  *
  *  D14  Dodds RM, Syddall HE, Cooper R, et al. Grip strength across the life course:
  *       normative data from twelve British studies. PLoS ONE 2014;9:e113637.
@@ -194,6 +203,48 @@ window.NORMS = (function () {
   };
 
   // ---------------------------------------------------------------
+  // NL14: Douma et al. 2014. Knee flexion (and other actions) as % BW
+  // converted from Newtons using each decade’s mean body weight.
+  // Row: [Non mean, Non SD, Dom mean, Dom SD]. Used for knee_flex ages 20–49
+  // (Andrews 1996 already covers 50–79 with a make-test protocol).
+  // ---------------------------------------------------------------
+  const NL14 = {
+    citation: 'Douma et al. 2014 (BMC Sports Sci Med Rehabil 6:10)',
+    ages: [20, 59],
+    unit: 'pct',
+    M: {
+      knee_flex: {
+        '20-29': [34.6, 7.1, 36.6, 7.8],
+        '30-39': [31.6, 7.0, 33.1, 7.6],
+        '40-49': [32.5, 9.5, 33.9, 9.5],
+        '50-59': [29.0, 6.8, 29.9, 7.1],
+      },
+    },
+    F: {
+      knee_flex: {
+        '20-29': [28.6, 5.5, 29.6, 5.7],
+        '30-39': [28.1, 5.2, 28.4, 6.1],
+        '40-49': [27.4, 7.8, 28.5, 7.6],
+        '50-59': [25.4, 6.8, 26.2, 6.3],
+      },
+    },
+    notes: {
+      knee_flex: 'Break test (tester overpowers the subject), seated hip & knee 90°. % body weight is force (N) ÷ stratum mean body weight (N). SD of % BW is the force SD scaled the same way. Break tests can read slightly higher than the make tests used in Andrews 1996; at ages 50–59 the two datasets’ means still agree closely.',
+      _all: 'Dutch working adults (n=462). MicroFet 2. Weight-normalised from published Newton tables and mean body weights, not from individual-level % BW.',
+    },
+    // force(N) = a + b*S + c*A + d*Wkg + e*Hcm ; S: male 1 / female 0
+    // Height is not collected in this app; sample-mean height is used (Table 2).
+    regression: {
+      knee_flex: {
+        L: [47.92, 43.52, -0.60, 1.36, 0.40],
+        R: [43.84, 47.03, -0.71, 1.33, 0.50],
+        heightM: 182.1,
+        heightF: 170.1,
+      },
+    },
+  };
+
+  // ---------------------------------------------------------------
   // M17: absolute force in Newtons, mean/SD, dominant limb
   // Bands: 3-9, 10-19, 20-59, 60+ ; Row per sex: [mean, SD]
   // ---------------------------------------------------------------
@@ -266,5 +317,5 @@ window.NORMS = (function () {
     },
   };
 
-  return { ACTIONS, DECADES, B97, A96, M17, D14 };
+  return { ACTIONS, DECADES, B97, A96, NL14, M17, D14 };
 })();

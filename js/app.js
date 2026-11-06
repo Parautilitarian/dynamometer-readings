@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const { ACTIONS, B97, A96, M17, D14 } = window.NORMS;
+  const { ACTIONS, B97, A96, NL14, M17, D14 } = window.NORMS;
   const G = 9.80665;             // N per kgf
   const LB_TO_N = 4.4482216;
   const STORAGE_KEY = 'hhd-norms-v1';
@@ -53,6 +53,7 @@
     return 'weak';
   }
   const RATING_LABEL = { strong: 'Strong', typical: 'Typical', below: 'Below average', weak: 'Weak', none: 'No reference' };
+  const PRED_SRC = { B97: 'Bohannon 1997', A96: 'Andrews 1996', NL14: 'Douma 2014' };
 
   // ------------------------------------------------------------------
   // Reference lookup
@@ -98,13 +99,23 @@
           extrapolated: age > 79, note: (A96.notes[actionId] || ''), label: `Andrews 1996 · ${sex === 'M' ? 'men' : 'women'} ${dec}${age > 79 ? ' (extrapolated)' : ''} · ${sideKey === 'D' ? 'dominant' : 'non-dominant'}` };
       }
     }
-    // 3) Dodds 2014 grip (kg, 5-90)
+    // 3) Douma 2014 (% BW, 20-59) — fills knee flexion under age 50
+    if (NL14[sex][actionId] && age >= 20 && age < 50) {
+      const dec = decadeFor(age);
+      const row = NL14[sex][actionId][dec];
+      if (row) {
+        return { source: 'NL14', citation: NL14.citation, unit: 'pct', mean: row[idx], sd: row[idx + 1],
+          extrapolated: false, note: [NL14.notes[actionId], NL14.notes._all].filter(Boolean).join(' '),
+          label: `Douma 2014 · ${sex === 'M' ? 'men' : 'women'} ${dec} · ${sideKey === 'D' ? 'dominant' : 'non-dominant'}` };
+      }
+    }
+    // 4) Dodds 2014 grip (kg, 5-90)
     if (actionId === 'grip' && age >= 5) {
       const d = dodds(sex, age);
       return { source: 'D14', citation: D14.citation, unit: 'kg', mean: d.mean, sd: d.sd, centiles: d.centiles,
         extrapolated: d.extrapolated, note: D14.notes._all, label: `Dodds 2014 · ${sex === 'M' ? 'men' : 'women'} age ${Math.min(age, 90)}${d.extrapolated ? ' (extrapolated)' : ''}` };
     }
-    // 4) 1000 Norms Project (absolute N, 3-101)
+    // 5) 1000 Norms Project (absolute N, 3-101)
     if (M17[sex][actionId] && age >= 3) {
       const band = M17.bands.find(b => age >= b.min && age <= b.max);
       if (band) {
@@ -117,16 +128,30 @@
   }
 
   /** Regression-predicted force (N) for sex/age/weight if available. */
-  function predictedForce(actionId, sex, age, weightN, sideKey) {
+  function predictedForce(actionId, sex, age, weightN, sideKey, side) {
     if (age === null || !weightN) return null;
-    const S = sex === 'F' ? 1 : 0;
-    let eq = null, src = null;
-    if (B97.regression[actionId] && age >= 20 && age <= 79) { eq = B97.regression[actionId]; src = 'B97'; }
-    else if (A96.regression[actionId] && age >= 50 && age <= 79) { eq = A96.regression[actionId]; src = 'A96'; }
-    if (!eq) return null;
-    const c = eq[sideKey];
-    const val = c[0] + c[1] * S + c[2] * age + c[3] * weightN;
-    return { value: val, source: src, uncertain: eq.uncertain === sideKey };
+    if (B97.regression[actionId] && age >= 20 && age <= 79) {
+      const S = sex === 'F' ? 1 : 0;
+      const c = B97.regression[actionId][sideKey];
+      const val = c[0] + c[1] * S + c[2] * age + c[3] * weightN;
+      return { value: val, source: 'B97', uncertain: B97.regression[actionId].uncertain === sideKey };
+    }
+    if (A96.regression[actionId] && age >= 50 && age <= 79) {
+      const S = sex === 'F' ? 1 : 0;
+      const c = A96.regression[actionId][sideKey];
+      const val = c[0] + c[1] * S + c[2] * age + c[3] * weightN;
+      return { value: val, source: 'A96' };
+    }
+    if (NL14.regression[actionId] && age >= 20 && age < 50) {
+      const eq = NL14.regression[actionId];
+      const c = eq[side];
+      const S = sex === 'M' ? 1 : 0;
+      const Wkg = weightN / G;
+      const H = sex === 'M' ? eq.heightM : eq.heightF;
+      const val = c[0] + c[1] * S + c[2] * age + c[3] * Wkg + c[4] * H;
+      return { value: val, source: 'NL14', heightAssumed: H };
+    }
+    return null;
   }
 
   // ------------------------------------------------------------------
@@ -154,7 +179,7 @@
             pctile = normCdf(z) * 100;
           }
         }
-        const pred = predictedForce(a.id, state.sex, state.age, bwN, sideKey);
+        const pred = predictedForce(a.id, state.sex, state.age, bwN, sideKey, side);
         results.push({
           action: a, side, sideKey, forceN, pct, ref, compared, z, pctile, rating: rating(z),
           predicted: pred, pctPredicted: pred ? forceN / pred.value * 100 : null,
@@ -355,7 +380,7 @@
         : '<span class="flag">none for this age</span>';
       const srcTxt = r.ref ? `<span title="${(r.ref.citation + (r.ref.note ? '\n' + r.ref.note : '')).replace(/"/g, '&quot;')}">${r.ref.label}${r.ref.note ? ' ⚠' : ''}</span>` : '–';
       const predTxt = r.predicted
-        ? `${fmt(r.pctPredicted, 0)}% <span class="flag" title="Predicted ${fmt(r.predicted.value, 0)} N from the ${r.predicted.source === 'B97' ? 'Bohannon 1997' : 'Andrews 1996'} regression${r.predicted.uncertain ? ' (coefficient misprinted in source; approximate)' : ''}">(${fmt(r.predicted.value, 0)} N${r.predicted.uncertain ? '*' : ''})</span>`
+        ? `${fmt(r.pctPredicted, 0)}% <span class="flag" title="Predicted ${fmt(r.predicted.value, 0)} N from the ${PRED_SRC[r.predicted.source] || r.predicted.source} regression${r.predicted.uncertain ? ' (coefficient misprinted in source; approximate)' : ''}${r.predicted.heightAssumed ? ` (height assumed ${fmt(r.predicted.heightAssumed, 0)} cm)` : ''}">(${fmt(r.predicted.value, 0)} N${r.predicted.uncertain ? '*' : ''})</span>`
         : '–';
       const readingTxt = state.forceUnit === 'N' ? `${fmt(r.forceN, 0)} N` : `${fmt(r.forceN, 0)} N <span class="flag">(${fmt(state.forceUnit === 'kg' ? r.forceN / G : r.forceN / LB_TO_N, 1)} ${state.forceUnit})</span>`;
       tr.innerHTML = `
@@ -452,7 +477,7 @@
         hip_er: { L: 150, R: 160 },
         hip_ir: { L: 190, R: 200 },
         knee_ext: { L: 360, R: 540 },
-        knee_flex: { L: null, R: null },
+        knee_flex: { L: 200, R: 270 },
         ankle_df: { L: 330, R: 345 },
         ankle_pf: { L: 300, R: 320 },
       };

@@ -12,12 +12,13 @@ There is no single universal HHD normal. Values depend on the dynamometer, the t
 | --- | --- | --- | --- |
 | [Bohannon 1997](https://pubmed.ncbi.nlm.nih.gov/9014953/) | 20–79 | Wrist ext, elbow flex/ext, shoulder ext/abd/ER, hip flex/abd, knee ext, ankle DF | **% of body weight**, by sex × decade × side, plus a regression on sex, age, and weight |
 | [Andrews, Thomas & Bohannon 1996](https://doi.org/10.1093/ptj/76.3.248) | 50–79 | Adds shoulder flex & IR and knee flex (and repeats the 1997 actions) | **% of body weight**, same layout, plus regression |
+| [Douma et al. 2014](https://pmc.ncbi.nlm.nih.gov/articles/PMC3996060/) | 20–49 | Knee flexion (hamstrings); seated hip/knee 90°, break test | Newton tables converted to **% of body weight** using each decade’s mean weight |
 | [McKay et al. 2017, 1000 Norms Project](https://pmc.ncbi.nlm.nih.gov/articles/PMC5200854/) | 3–101 | Grip, ankle DF/PF, hip ABD/IR/ER, elbow flex/ext, shoulder IR/ER (dominant limb) | Absolute **Newtons** (not weight-normalised) |
 | [Dodds et al. 2014](https://doi.org/10.1371/journal.pone.0113637) | 5–90 | Hand grip (Jamar-style) | **kg**, centiles and mean (SD) by sex and age |
 
 A reading more than **2 SD below** the matched mean is flagged as weak (the cutoff Andrews & Bohannon used). ±1 SD is treated as typical.
 
-Typical adult % body-weight means (dominant side, men 20–29, Bohannon 1997) give a sense of scale: knee extension ~74%, ankle dorsiflexion ~49%, shoulder extension ~50%, hip abduction ~40%, elbow flexion ~36%, shoulder abduction ~33%, hip flexion ~27%, shoulder ER ~26%, wrist extension ~23%. Women of the same age are lower in most upper-limb actions but similar or higher for knee extension as a fraction of body weight.
+Typical adult % body-weight means (dominant side, men 20–29) give a sense of scale: knee extension ~74%, ankle dorsiflexion ~49%, shoulder extension ~50%, hip abduction ~40%, knee flexion (hamstrings) ~37%, elbow flexion ~36%, shoulder abduction ~33%, hip flexion ~27%, shoulder ER ~26%, wrist extension ~23%. Women of the same age are lower in most upper-limb actions; hamstrings are about 30% of body weight.
 
 ## How to use it
 
