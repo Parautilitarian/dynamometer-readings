@@ -12,7 +12,8 @@
   // ------------------------------------------------------------------
   const state = {
     sex: 'M', age: null, weight: null, weightUnit: 'kg', dominant: 'R', forceUnit: 'N',
-    readings: {},          // actionId -> { L: number|null, R: number|null }
+    trials: 1,             // 1–6 readings collected per muscle/side
+    readings: {},          // actionId -> { L: number[], R: number[] }
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -54,6 +55,95 @@
   }
   const RATING_LABEL = { strong: 'Strong', typical: 'Typical', below: 'Below average', weak: 'Weak', none: 'No reference' };
   const PRED_SRC = { B97: 'Bohannon 1997', A96: 'Andrews 1996', NL14: 'Douma 2014' };
+  const MZ_CUTOFF = 3.5;          // Iglewicz–Hoaglin modified z-score
+  const CONSISTENCY_RANGE = 0.10; // trials “agree” if range ≤ 10% of their mean
+
+  // ------------------------------------------------------------------
+  // Trial aggregation (mean if consistent; drop outliers otherwise)
+  // ------------------------------------------------------------------
+  function asTrialArray(v) {
+    if (Array.isArray(v)) return v;
+    if (v === null || v === undefined || v === '') return [];
+    return [v];
+  }
+  function trialsFor(actionId, side) {
+    const src = asTrialArray(state.readings[actionId]?.[side]);
+    const n = state.trials;
+    const arr = Array(n).fill(null);
+    for (let i = 0; i < n; i++) arr[i] = src[i] ?? null;
+    return arr;
+  }
+  function setTrial(actionId, side, idx, val) {
+    state.readings[actionId] = state.readings[actionId] || { L: [], R: [] };
+    let arr = asTrialArray(state.readings[actionId][side]).slice();
+    while (arr.length <= idx) arr.push(null);
+    arr[idx] = val;
+    state.readings[actionId][side] = arr;
+  }
+  function median(arr) {
+    const s = [...arr].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  }
+  function mean(arr) {
+    return arr.reduce((a, b) => a + b, 0) / arr.length;
+  }
+  function isConsistent(arr) {
+    if (arr.length <= 1) return true;
+    const m = mean(arr);
+    if (m === 0) return arr.every(v => v === 0);
+    return (Math.max(...arr) - Math.min(...arr)) / Math.abs(m) <= CONSISTENCY_RANGE;
+  }
+  /**
+   * Combine 1–6 trials: drop isolated outliers (modified z > 3.5), then
+   * use the mean if the rest agree within 10%, otherwise the median.
+   */
+  function aggregateTrials(rawList) {
+    const values = asTrialArray(rawList)
+      .filter(v => v !== null && v !== undefined && v !== '' && !isNaN(Number(v)))
+      .map(Number);
+    if (values.length === 0) return null;
+    if (values.length === 1) {
+      return { value: values[0], method: 'single', kept: values, dropped: [], consistent: true };
+    }
+    let kept = values.slice();
+    const dropped = [];
+    for (let guard = 0; guard < 6 && kept.length >= 3; guard++) {
+      const med = median(kept);
+      const absDev = kept.map(v => Math.abs(v - med));
+      const mad = median(absDev);
+      const flagged = [];
+      for (let i = 0; i < kept.length; i++) {
+        const mz = mad === 0
+          ? (kept[i] === med ? 0 : Infinity)
+          : 0.6745 * (kept[i] - med) / mad;
+        if (Math.abs(mz) > MZ_CUTOFF) flagged.push(i);
+      }
+      if (flagged.length === 0) break;
+      for (let i = flagged.length - 1; i >= 0; i--) {
+        dropped.push(kept[flagged[i]]);
+        kept.splice(flagged[i], 1);
+      }
+    }
+    if (kept.length === 0) {
+      kept = [median(values)];
+    }
+    const consistent = isConsistent(kept);
+    if (kept.length === 1) {
+      return { value: kept[0], method: 'single', kept, dropped, consistent: true };
+    }
+    if (consistent) {
+      return { value: mean(kept), method: 'mean', kept, dropped, consistent: true };
+    }
+    return { value: median(kept), method: 'median', kept, dropped, consistent: false };
+  }
+  function aggNote(agg) {
+    if (!agg || agg.method === 'single' && agg.dropped.length === 0) return '';
+    const n = agg.kept.length;
+    let t = agg.method === 'mean' ? `mean of ${n}` : agg.method === 'median' ? `median of ${n}` : `${n} trial${n === 1 ? '' : 's'}`;
+    if (agg.dropped.length) t += ` · dropped ${agg.dropped.length}`;
+    return t;
+  }
 
   // ------------------------------------------------------------------
   // Reference lookup
@@ -161,11 +251,10 @@
     const results = [];   // one per action-side with a reading
     const bwN = bodyWeightN();
     for (const a of ACTIONS) {
-      const r = state.readings[a.id] || {};
       for (const side of ['L', 'R']) {
-        const raw = r[side];
-        if (raw === null || raw === undefined || raw === '' || isNaN(raw)) continue;
-        const forceN = toNewtons(Number(raw), state.forceUnit);
+        const agg = aggregateTrials(trialsFor(a.id, side));
+        if (!agg) continue;
+        const forceN = toNewtons(agg.value, state.forceUnit);
         const pct = bwN ? forceN / bwN * 100 : null;
         const sideKey = side === state.dominant ? 'D' : 'N';
         const ref = pickReference(a.id, state.sex, state.age, sideKey);
@@ -183,6 +272,7 @@
         results.push({
           action: a, side, sideKey, forceN, pct, ref, compared, z, pctile, rating: rating(z),
           predicted: pred, pctPredicted: pred ? forceN / pred.value * 100 : null,
+          agg,
         });
       }
     }
@@ -192,15 +282,31 @@
   // ------------------------------------------------------------------
   // Rendering: reading inputs
   // ------------------------------------------------------------------
+  function trialInputsHtml(action, side) {
+    const n = state.trials;
+    const stackClass = n === 1 ? 'trial-stack single' : 'trial-stack';
+    let html = `<div class="${stackClass}">`;
+    for (let i = 0; i < n; i++) {
+      const label = n === 1
+        ? `${action.label} ${side === 'L' ? 'left' : 'right'}`
+        : `${action.label} ${side === 'L' ? 'left' : 'right'} trial ${i + 1}`;
+      html += `<input type="number" min="0" step="0.1" inputmode="decimal" placeholder="${n === 1 ? '' : i + 1}" data-action="${action.id}" data-side="${side}" data-trial="${i}" aria-label="${label}">`;
+    }
+    html += `</div><div class="trial-agg" data-agg="${action.id}|${side}"></div>`;
+    return html;
+  }
+
   function renderInputs() {
     const host = byId('readingGroups');
     host.innerHTML = '';
+    const leftHead = state.trials === 1 ? 'Left' : 'Left (trials)';
+    const rightHead = state.trials === 1 ? 'Right' : 'Right (trials)';
     for (const region of [['upper', 'Upper limb'], ['lower', 'Lower limb']]) {
       const [key, title] = region;
       const g = document.createElement('div');
       g.className = 'group';
       g.innerHTML = `<h3>${title}</h3>
-        <table class="rtable"><thead><tr><th>Action</th><th></th><th>Left</th><th></th><th>Right</th></tr></thead><tbody></tbody></table>`;
+        <table class="rtable"><thead><tr><th>Action</th><th></th><th>${leftHead}</th><th></th><th>${rightHead}</th></tr></thead><tbody></tbody></table>`;
       const tb = g.querySelector('tbody');
       for (const a of ACTIONS.filter(x => x.region === key)) {
         const tr = document.createElement('tr');
@@ -208,20 +314,30 @@
         tr.innerHTML = `
           <td class="name">${a.label}<span class="info" title="${a.muscles}\n\n${a.protocol}">i</span><small>${a.muscles}</small></td>
           <td class="pill-cell"><span class="pill" data-pill="${a.id}-L"></span></td>
-          <td><input type="number" min="0" step="0.1" inputmode="decimal" data-action="${a.id}" data-side="L" aria-label="${a.label} left"></td>
+          <td>${trialInputsHtml(a, 'L')}</td>
           <td class="pill-cell"><span class="pill" data-pill="${a.id}-R"></span></td>
-          <td><input type="number" min="0" step="0.1" inputmode="decimal" data-action="${a.id}" data-side="R" aria-label="${a.label} right"></td>`;
+          <td>${trialInputsHtml(a, 'R')}</td>`;
         tb.appendChild(tr);
       }
       host.appendChild(g);
     }
-    host.addEventListener('input', (e) => {
-      const el = e.target;
-      if (!el.matches('input[data-action]')) return;
-      const id = el.dataset.action, side = el.dataset.side;
-      state.readings[id] = state.readings[id] || { L: null, R: null };
-      state.readings[id][side] = el.value === '' ? null : Number(el.value);
-      update();
+  }
+
+  function onReadingInput(e) {
+    const el = e.target;
+    if (!el.matches('input[data-action]')) return;
+    const idx = Number(el.dataset.trial || 0);
+    setTrial(el.dataset.action, el.dataset.side, idx, el.value === '' ? null : Number(el.value));
+    update();
+  }
+
+  function renderTrialSummaries() {
+    document.querySelectorAll('[data-agg]').forEach(el => {
+      const [id, side] = el.dataset.agg.split('|');
+      const agg = aggregateTrials(trialsFor(id, side));
+      const note = (state.trials > 1 && agg) ? aggNote(agg) : '';
+      el.textContent = note;
+      el.classList.toggle('has-drop', !!(agg && agg.dropped.length));
     });
   }
 
@@ -232,8 +348,9 @@
     byId('weightUnit').value = state.weightUnit;
     byId('dominant').value = state.dominant;
     byId('forceUnit').value = state.forceUnit;
+    byId('trialCount').value = String(state.trials);
     document.querySelectorAll('input[data-action]').forEach(el => {
-      const v = state.readings[el.dataset.action]?.[el.dataset.side];
+      const v = trialsFor(el.dataset.action, el.dataset.side)[Number(el.dataset.trial || 0)];
       el.value = (v === null || v === undefined) ? '' : v;
     });
   }
@@ -382,7 +499,9 @@
       const predTxt = r.predicted
         ? `${fmt(r.pctPredicted, 0)}% <span class="flag" title="Predicted ${fmt(r.predicted.value, 0)} N from the ${PRED_SRC[r.predicted.source] || r.predicted.source} regression${r.predicted.uncertain ? ' (coefficient misprinted in source; approximate)' : ''}${r.predicted.heightAssumed ? ` (height assumed ${fmt(r.predicted.heightAssumed, 0)} cm)` : ''}">(${fmt(r.predicted.value, 0)} N${r.predicted.uncertain ? '*' : ''})</span>`
         : '–';
-      const readingTxt = state.forceUnit === 'N' ? `${fmt(r.forceN, 0)} N` : `${fmt(r.forceN, 0)} N <span class="flag">(${fmt(state.forceUnit === 'kg' ? r.forceN / G : r.forceN / LB_TO_N, 1)} ${state.forceUnit})</span>`;
+      const note = aggNote(r.agg);
+      const unitBit = state.forceUnit === 'N' ? `${fmt(r.forceN, 0)} N` : `${fmt(r.forceN, 0)} N <span class="flag">(${fmt(state.forceUnit === 'kg' ? r.forceN / G : r.forceN / LB_TO_N, 1)} ${state.forceUnit})</span>`;
+      const readingTxt = note ? `${unitBit} <span class="flag">${note}</span>` : unitBit;
       tr.innerHTML = `
         <td>${r.action.label}</td>
         <td>${r.side === 'L' ? 'Left' : 'Right'} <span class="flag">${r.sideKey === 'D' ? 'dom' : 'non-dom'}</span></td>
@@ -431,7 +550,16 @@
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (s && typeof s === 'object') Object.assign(state, s);
+      if (s && typeof s === 'object') {
+        Object.assign(state, s);
+        const n = Number(state.trials);
+        state.trials = (n >= 1 && n <= 6) ? n : 1;
+        const migrated = {};
+        for (const [id, sides] of Object.entries(state.readings || {})) {
+          migrated[id] = { L: asTrialArray(sides?.L), R: asTrialArray(sides?.R) };
+        }
+        state.readings = migrated;
+      }
     } catch (_) { /* ignore */ }
   }
 
@@ -442,6 +570,7 @@
     const results = evaluate();
     renderBanner();
     renderBody(results);
+    renderTrialSummaries();
     renderExpected();
     renderTable(results);
     save();
@@ -454,33 +583,42 @@
     byId('weightUnit').addEventListener('change', e => { state.weightUnit = e.target.value; update(); });
     byId('dominant').addEventListener('change', e => { state.dominant = e.target.value; update(); });
     byId('forceUnit').addEventListener('change', e => { state.forceUnit = e.target.value; update(); });
+    byId('trialCount').addEventListener('change', e => {
+      state.trials = Number(e.target.value);
+      renderInputs();
+      syncInputsFromState();
+      update();
+    });
 
     byId('btnClear').addEventListener('click', () => {
       state.readings = {}; state.age = null; state.weight = null;
+      renderInputs();
       syncInputsFromState(); update();
     });
     byId('btnExample').addEventListener('click', () => {
-      Object.assign(state, { sex: 'M', age: 45, weight: 80, weightUnit: 'kg', dominant: 'R', forceUnit: 'N' });
-      // Example: a 45-year-old man, 80 kg (785 N). Mostly typical, weak left knee extension, strong grip.
+      Object.assign(state, { sex: 'M', age: 45, weight: 80, weightUnit: 'kg', dominant: 'R', forceUnit: 'N', trials: 3 });
+      // Example: a 45-year-old man, 80 kg. Three trials each; left knee extension has a high outlier that is dropped.
+      const t = (a, b, c) => [a, b, c];
       state.readings = {
-        grip: { L: 440, R: 480 },
-        wrist_ext: { L: 160, R: 175 },
-        elbow_flex: { L: 250, R: 265 },
-        elbow_ext: { L: 190, R: 200 },
-        shoulder_flex: { L: null, R: null },
-        shoulder_ext: { L: 360, R: 380 },
-        shoulder_abd: { L: 215, R: 230 },
-        shoulder_er: { L: 150, R: 165 },
-        shoulder_ir: { L: 170, R: 185 },
-        hip_flex: { L: 170, R: 180 },
-        hip_abd: { L: 290, R: 300 },
-        hip_er: { L: 150, R: 160 },
-        hip_ir: { L: 190, R: 200 },
-        knee_ext: { L: 360, R: 540 },
-        knee_flex: { L: 200, R: 270 },
-        ankle_df: { L: 330, R: 345 },
-        ankle_pf: { L: 300, R: 320 },
+        grip: { L: t(440, 432, 448), R: t(480, 470, 488) },
+        wrist_ext: { L: t(160, 155, 164), R: t(175, 170, 178) },
+        elbow_flex: { L: t(250, 246, 255), R: t(265, 260, 270) },
+        elbow_ext: { L: t(190, 186, 194), R: t(200, 196, 204) },
+        shoulder_flex: { L: [], R: [] },
+        shoulder_ext: { L: t(360, 352, 368), R: t(380, 372, 386) },
+        shoulder_abd: { L: t(215, 210, 220), R: t(230, 224, 234) },
+        shoulder_er: { L: t(150, 146, 154), R: t(165, 160, 168) },
+        shoulder_ir: { L: t(170, 166, 174), R: t(185, 180, 190) },
+        hip_flex: { L: t(170, 166, 174), R: t(180, 176, 184) },
+        hip_abd: { L: t(290, 284, 296), R: t(300, 294, 306) },
+        hip_er: { L: t(150, 146, 154), R: t(160, 156, 164) },
+        hip_ir: { L: t(190, 186, 194), R: t(200, 196, 204) },
+        knee_ext: { L: t(360, 350, 540), R: t(540, 530, 548) },
+        knee_flex: { L: t(200, 196, 206), R: t(270, 264, 276) },
+        ankle_df: { L: t(330, 324, 336), R: t(345, 338, 350) },
+        ankle_pf: { L: t(300, 294, 306), R: t(320, 314, 326) },
       };
+      renderInputs();
       syncInputsFromState(); update();
     });
   }
@@ -491,10 +629,11 @@
   function init() {
     byId('bodyFront').innerHTML = window.BODY.render('front');
     byId('bodyBack').innerHTML = window.BODY.render('back');
-    renderInputs();
     renderProtocol();
     load();
+    renderInputs();
     syncInputsFromState();
+    byId('readingGroups').addEventListener('input', onReadingInput);
     bindAbout();
     setupBodyInteractions();
     update();

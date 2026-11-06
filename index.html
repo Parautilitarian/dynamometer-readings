@@ -11,7 +11,7 @@
   <header class="site-header">
     <div class="wrap">
       <h1>Hand-held Dynamometer Strength Norms</h1>
-      <p class="tagline">Enter your isometric strength readings and see how each muscle group compares with healthy people of your sex and age, normalised to body weight. Nothing leaves your browser.</p>
+      <p class="tagline">Enter your isometric strength readings and see how each muscle group compares with healthy people of your sex and age, normalized to body weight. Nothing leaves your browser.</p>
     </div>
   </header>
 
@@ -58,7 +58,19 @@
       </div>
 
       <h2>2. Readings</h2>
-      <p class="hint">Enter the peak isometric force for each muscle action you tested. Leave blank anything you did not measure. Use the <em>make</em> test (you push, tester holds) in the positions listed under <a href="#methods">Methods</a> for the norms to apply.</p>
+      <div class="trial-bar">
+        <label>Readings per muscle
+          <select id="trialCount">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+          </select>
+        </label>
+        <p class="hint">Enter each trial you took (1–6). Leave unused muscles blank. If the series agrees, the mean is used; a clear outlier is dropped and the rest are combined. Use the <em>make</em> test (you push, tester holds) in the positions listed under <a href="#methods">Methods</a> for the norms to apply.</p>
+      </div>
 
       <div id="readingGroups"></div>
     </section>
@@ -117,6 +129,7 @@
     <h3>How the comparison works</h3>
     <ol>
       <li>Your reading is converted to Newtons and divided by your body weight (in Newtons) to give <strong>force as % of body weight</strong>. Normalising to body weight removes most of the size effect, so heavier and lighter people can be judged on the same scale.</li>
+      <li>If you enter more than one trial, isolated outliers are dropped (modified z-score &gt; 3.5, Iglewicz &amp; Hoaglin) and the remaining values are combined: the <strong>mean</strong> when they agree within 10% of each other, otherwise the <strong>median</strong>.</li>
       <li>The value is compared with the <strong>mean and standard deviation (SD)</strong> for healthy people of your sex, age decade and limb side (dominant / non-dominant) from the reference study.</li>
       <li>A <strong>z-score</strong> (how many SDs you are from the mean) and the corresponding <strong>percentile</strong> are shown. Following Andrews &amp; Bohannon, a value more than 2 SD below the mean is flagged as <em>weak</em>; −1 to −2 SD as <em>below average</em>.</li>
       <li>Where the source paper published a <strong>regression equation</strong> on sex, age and body weight, your reading is also shown as a % of the force predicted for someone exactly like you.</li>
