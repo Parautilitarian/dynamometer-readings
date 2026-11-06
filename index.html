@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hand-held Dynamometer Strength Norms</title>
+  <meta name="description" content="Compare hand-held dynamometer (HHD) muscle strength readings against published age- and sex-specific normative values, normalised to body weight, with a body-map visualisation.">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1>Hand-held Dynamometer Strength Norms</h1>
+      <p class="tagline">Enter your isometric strength readings and see how each muscle group compares with healthy people of your sex and age, normalised to body weight. Nothing leaves your browser.</p>
+    </div>
+  </header>
+
+  <main class="wrap layout">
+    <!-- ================= INPUT COLUMN ================= -->
+    <section class="panel inputs" aria-labelledby="h-about">
+      <h2 id="h-about">1. About you</h2>
+      <div class="grid-2">
+        <label>Sex
+          <select id="sex">
+            <option value="M">Male</option>
+            <option value="F">Female</option>
+          </select>
+        </label>
+        <label>Age (years)
+          <input id="age" type="number" min="3" max="110" step="1" placeholder="e.g. 45">
+        </label>
+        <label>Body weight
+          <span class="inline">
+            <input id="weight" type="number" min="5" step="0.1" placeholder="e.g. 75">
+            <select id="weightUnit">
+              <option value="kg">kg</option>
+              <option value="lb">lb</option>
+            </select>
+          </span>
+        </label>
+        <label>Dominant side
+          <select id="dominant">
+            <option value="R">Right</option>
+            <option value="L">Left</option>
+          </select>
+        </label>
+        <label>Dynamometer reading unit
+          <select id="forceUnit">
+            <option value="N">Newtons (N)</option>
+            <option value="kg">kilograms (kgf)</option>
+            <option value="lb">pounds (lbf)</option>
+          </select>
+        </label>
+        <div class="actions">
+          <button type="button" id="btnExample" class="btn ghost">Load example</button>
+          <button type="button" id="btnClear" class="btn ghost">Clear all</button>
+        </div>
+      </div>
+
+      <h2>2. Readings</h2>
+      <p class="hint">Enter the peak isometric force for each muscle action you tested. Leave blank anything you did not measure. Use the <em>make</em> test (you push, tester holds) in the positions listed under <a href="#methods">Methods</a> for the norms to apply.</p>
+
+      <div id="readingGroups"></div>
+    </section>
+
+    <!-- ================= RESULTS COLUMN ================= -->
+    <section class="panel results" aria-labelledby="h-results">
+      <h2 id="h-results">3. Your strength map</h2>
+      <div id="statusBanner" class="banner" hidden></div>
+
+      <div class="body-wrap">
+        <figure class="body-fig">
+          <div id="bodyFront" class="body-svg"></div>
+          <figcaption>Front view</figcaption>
+        </figure>
+        <figure class="body-fig">
+          <div id="bodyBack" class="body-svg"></div>
+          <figcaption>Back view</figcaption>
+        </figure>
+      </div>
+
+      <div class="legend" aria-label="Legend">
+        <span class="chip c-strong">Strong (&gt; +1 SD)</span>
+        <span class="chip c-typical">Typical (±1 SD)</span>
+        <span class="chip c-below">Below average (−1 to −2 SD)</span>
+        <span class="chip c-weak">Weak (&lt; −2 SD)</span>
+        <span class="chip c-none">No data / not entered</span>
+      </div>
+      <p class="hint body-hint">Hover a muscle for the comparison. Click it to jump to that reading. Labels show your percentile when a reading is entered, or the typical % of body weight for someone of your sex and age.</p>
+
+      <div id="tooltip" class="tooltip" role="status" hidden></div>
+
+      <h3>Typical values for you</h3>
+      <p class="hint">Reference mean ± 1 SD for your sex, age, and (where the study used it) limb side. Body-weight-normalised actions are % of body weight; grip is kilograms; a few actions from the 1000 Norms Project are absolute Newtons.</p>
+      <div id="expectedGrid" class="expected-grid"></div>
+
+      <h3>Detailed results</h3>
+      <div class="table-scroll">
+        <table id="resultsTable" class="results-table">
+          <thead>
+            <tr>
+              <th>Muscle action</th><th>Side</th><th>Reading</th><th>% body wt</th>
+              <th>Reference mean ± SD</th><th>z</th><th>Percentile</th><th>Rating</th><th>% of predicted</th><th>Source</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="hint" id="noResults">Enter your details and at least one reading to see results.</p>
+    </section>
+  </main>
+
+  <!-- ================= METHODS ================= -->
+  <section class="wrap panel methods" id="methods">
+    <h2>Methods &amp; sources</h2>
+
+    <h3>How the comparison works</h3>
+    <ol>
+      <li>Your reading is converted to Newtons and divided by your body weight (in Newtons) to give <strong>force as % of body weight</strong>. Normalising to body weight removes most of the size effect, so heavier and lighter people can be judged on the same scale.</li>
+      <li>The value is compared with the <strong>mean and standard deviation (SD)</strong> for healthy people of your sex, age decade and limb side (dominant / non-dominant) from the reference study.</li>
+      <li>A <strong>z-score</strong> (how many SDs you are from the mean) and the corresponding <strong>percentile</strong> are shown. Following Andrews &amp; Bohannon, a value more than 2 SD below the mean is flagged as <em>weak</em>; −1 to −2 SD as <em>below average</em>.</li>
+      <li>Where the source paper published a <strong>regression equation</strong> on sex, age and body weight, your reading is also shown as a % of the force predicted for someone exactly like you.</li>
+    </ol>
+
+    <h3>Reference datasets (selected automatically)</h3>
+    <table class="src-table">
+      <thead><tr><th>Dataset</th><th>Used for</th><th>Sample</th><th>Unit</th></tr></thead>
+      <tbody>
+        <tr><td>Bohannon RW. <em>Arch Phys Med Rehabil</em> 1997;78:26-32 (<a href="https://pubmed.ncbi.nlm.nih.gov/9014953/" target="_blank" rel="noopener">PubMed</a>)</td>
+            <td>Ages 20–79: wrist ext, elbow flex/ext, shoulder ext/abd/ER, hip flex/abd, knee ext, ankle DF</td>
+            <td>231 healthy adults (106 M, 125 F), USA, Ametek Accuforce II, make test</td><td>% body weight, by sex × decade × side</td></tr>
+        <tr><td>Andrews AW, Thomas MW, Bohannon RW. <em>Phys Ther</em> 1996;76:248-259 (<a href="https://doi.org/10.1093/ptj/76.3.248" target="_blank" rel="noopener">DOI</a>)</td>
+            <td>Ages 50–79: shoulder flex &amp; IR, knee flex (plus all Bohannon-1997 actions)</td>
+            <td>156 healthy adults (77 M, 70 F), USA, Chatillon CSD400C, make test</td><td>% body weight, by sex × decade × side</td></tr>
+        <tr><td>McKay MJ et al. 1000 Norms Project. <em>Neurology</em> 2017;88:36-43 (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC5200854/" target="_blank" rel="noopener">PMC</a>)</td>
+            <td>Ages 3–19 and 80+, and for hip IR/ER, ankle PF, shoulder IR (ages 20–49)</td>
+            <td>1,000 healthy people aged 3–101, Australia, Citec CT 3001, dominant side</td><td>Absolute Newtons (not weight-normalised), by sex × age band</td></tr>
+        <tr><td>Dodds RM et al. <em>PLoS ONE</em> 2014;9:e113637 (<a href="https://doi.org/10.1371/journal.pone.0113637" target="_blank" rel="noopener">DOI</a>)</td>
+            <td>Hand grip, ages 5–90</td>
+            <td>49,964 participants from 12 British population studies (mostly Jamar)</td><td>kg, centiles &amp; mean (SD) by sex × age</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Test positions used by the reference studies</h3>
+    <p class="hint">Hand-held dynamometer norms are only valid if you test the same way. All actions were gravity-neutralised <em>make</em> tests: build to maximal effort over ~2 s and hold ~5 s while the tester keeps the dynamometer still. Best of two trials.</p>
+    <table class="src-table" id="protocolTable"><thead><tr><th>Action</th><th>Main muscles</th><th>Position &amp; dynamometer placement</th></tr></thead><tbody></tbody></table>
+
+    <h3>Caveats</h3>
+    <ul>
+      <li>Reference samples were convenience samples of healthy volunteers; values differ between countries, devices and testers. Treat ratings as a guide, not a diagnosis.</li>
+      <li>Knee-extension norms for younger men are under-estimated because many subjects exceeded the dynamometer ceiling (650 N in 1997; 512 N in 1996).</li>
+      <li>Plantarflexion and knee extension are hard for a tester to resist by hand; readings may reflect tester strength as much as yours.</li>
+      <li>For ages 80+ the 70–79 decade is used and marked <em>extrapolated</em>. For children and adolescents only the 1000 Norms Project (absolute force) is available.</li>
+      <li>The 1000 Norms Project tested the dominant limb only; its values are applied to both sides here.</li>
+      <li>This tool is for education and self-tracking. It is not medical advice.</li>
+    </ul>
+  </section>
+
+  <footer class="wrap foot">
+    <p>Open source · data transcribed from the cited publications · <a href="https://github.com/Parautilitarian/dynamometer-readings" target="_blank" rel="noopener">GitHub</a></p>
+  </footer>
+
+  <script src="js/norms.js"></script>
+  <script src="js/body.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
